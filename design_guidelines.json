@@ -1,0 +1,145 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast)",
+  "typography": {
+    "headings": {
+      "family": "Cabinet Grotesk",
+      "weights": ["500", "700", "900"],
+      "usage": "Bold, expressive headers. Never center by default."
+    },
+    "body": {
+      "family": "Satoshi",
+      "weights": ["400", "500"],
+      "usage": "Clean, readable dense data."
+    },
+    "data_numbers": {
+      "family": "IBM Plex Mono",
+      "weights": ["400", "600", "700"],
+      "usage": "Monospaced for tables, metrics, and KPI cards. Crucial for data alignment."
+    },
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl tracking-tight leading-none",
+      "h2": "text-2xl sm:text-3xl tracking-tight",
+      "h3": "text-xl sm:text-2xl",
+      "h4": "text-lg font-medium",
+      "body": "text-sm text-[#616165]",
+      "labels": "text-xs uppercase tracking-[0.2em] text-[#616165]"
+    }
+  },
+  "colors": {
+    "background": {
+      "default": "#FFFFFF",
+      "subtle": "#F7F7F8",
+      "muted": "#EBEBEC",
+      "nav": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#0A0A0B",
+      "secondary": "#616165",
+      "disabled": "#A0A0A5"
+    },
+    "primary": {
+      "default": "#000000",
+      "hover": "#1F1F22",
+      "foreground": "#FFFFFF"
+    },
+    "status": {
+      "success": { "bg": "#E9F9EE", "text": "#30A46C", "border": "#30A46C/20" },
+      "danger": { "bg": "#FEF3F2", "text": "#E5484D", "border": "#E5484D/20" },
+      "warning": { "bg": "#FFF8E6", "text": "#F5D90A", "border": "#F5D90A/20" },
+      "info": { "bg": "#E6F4FE", "text": "#0090FF", "border": "#0090FF/20" }
+    },
+    "borders": {
+      "default": "#E2E2E6",
+      "focus": "#000000",
+      "active": "#0A0A0B"
+    }
+  },
+  "layout": {
+    "spacing": {
+      "container": "p-6 sm:p-8",
+      "card_internal": "p-4 sm:p-5",
+      "gap_dense": "gap-4",
+      "gap_loose": "gap-8"
+    },
+    "grid": {
+      "strategy": "Control Room Grid",
+      "dashboard_metrics": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+      "dashboard_charts": "grid grid-cols-1 lg:grid-cols-3 gap-6",
+      "chart_span": "lg:col-span-2",
+      "feed_span": "lg:col-span-1"
+    },
+    "surface": {
+      "cards": "bg-white border border-[#E2E2E6] rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+      "sidebar": "bg-[#F7F7F8] border-r border-[#E2E2E6]",
+      "glass": "backdrop-blur-xl bg-white/80 border-b border-[#E2E2E6]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-black text-white hover:bg-[#1F1F22] rounded-lg px-4 py-2 text-sm font-medium transition-all shadow-sm",
+      "secondary": "bg-white text-[#0A0A0B] border border-[#E2E2E6] hover:bg-[#F7F7F8] hover:text-[#0A0A0B] rounded-lg px-4 py-2 text-sm font-medium transition-all shadow-sm",
+      "ghost": "text-[#616165] hover:text-[#0A0A0B] hover:bg-[#F7F7F8] rounded-lg px-4 py-2 text-sm font-medium transition-all"
+    },
+    "inputs": {
+      "default": "border border-[#E2E2E6] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-black/10 focus:border-black transition-all bg-white text-[#0A0A0B] placeholder:text-[#A0A0A5]"
+    },
+    "tables": {
+      "container": "border border-[#E2E2E6] rounded-xl overflow-hidden bg-white",
+      "header": "bg-[#F7F7F8] border-b border-[#E2E2E6] text-xs uppercase tracking-wider text-[#616165] font-semibold text-left",
+      "row": "border-b border-[#E2E2E6] hover:bg-[#F7F7F8]/50 transition-colors last:border-0",
+      "cell": "px-4 py-3 text-sm text-[#0A0A0B] whitespace-nowrap"
+    },
+    "badges": {
+      "default": "inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border"
+    }
+  },
+  "animations": {
+    "hover": "transition-all duration-200 ease-in-out",
+    "focus": "focus:outline-none focus:ring-2 focus:ring-black/20 focus:ring-offset-1",
+    "micro": "active:scale-[0.98]"
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "weight": "regular",
+    "size": "w-4 h-4 sm:w-5 sm:h-5"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "agency_logo",
+        "url": "https://static.prod-images.emergentagent.com/jobs/8bd9bf73-59cc-43ee-b422-572c119c97d7/images/14fece385ac0b7c90013754eee26cacc88e8daefa52fab522e1e1b19732e65f5.png",
+        "description": "Minimalist abstract logo for the Ad Agency"
+      },
+      {
+        "category": "login_background",
+        "url": "https://static.prod-images.emergentagent.com/jobs/8bd9bf73-59cc-43ee-b422-572c119c97d7/images/bebe7b74162f18de22f5badeb75357917caf071c0517931ebc9754071bcb49ce.png",
+        "description": "Clean office desk environment for the login split screen"
+      },
+      {
+        "category": "user_avatar_super_admin",
+        "url": "https://images.unsplash.com/photo-1762341114073-57e76eca61ea?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwzfHxidXNpbmVzcyUyMHRlYW0lMjBhYnN0cmFjdHxlbnwwfHx8fDE3NzkxMjIzODJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Super admin user avatar for sidebar profile"
+      },
+      {
+        "category": "customer_brand_avatar_1",
+        "url": "https://images.unsplash.com/photo-1762341124010-c358e97eba6d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwyfHxidXNpbmVzcyUyMHRlYW0lMjBhYnN0cmFjdHxlbnwwfHx8fDE3NzkxMjIzODJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Customer/client workspace avatar"
+      }
+    ]
+  },
+  "specific_instructions": {
+    "main_agent": [
+      "IMPLEMENTATION ARCHITECTURE: Use Vite + React + Tailwind + Shadcn. This is an enterprise B2B SaaS dashboard. Ensure layout is 100vh overflow-hidden on the main container with independent scrolling in the sidebar and content area.",
+      "TYPOGRAPHY: Import Cabinet Grotesk, Satoshi, and IBM Plex Mono. Apply them globally. Data numbers (ROAS, Spend, CTR) MUST use IBM Plex Mono for alignment.",
+      "LAYOUT: Implement a fixed left sidebar (`w-64`) with a `#F7F7F8` background. The main content area should have a `#FFFFFF` background. Include a sticky header in the main area with glassmorphism (`backdrop-blur-xl bg-white/80`).",
+      "WORKSPACE SWITCHER: Top of the sidebar must have a Multi-brand workspace switcher using Shadcn Select/DropdownMenu displaying the active client's name, avatar, and an active state icon.",
+      "DATA GRID: Use 'Control Room Grid' for analytics. Cards must have `border-[#E2E2E6]` and subtle shadows. KPI metric cards (Spend, CTR, CPC, Conversions, ROAS, Impressions) must have a unified height and structured data hierarchy (Label -> Value -> Delta badge).",
+      "AI AUDIT PANEL: Render Claude recommendations as specialized cards. Add a subtle 1px animated border gradient or use a pale info background (`#E6F4FE`) with a Phosphor `Sparkle` icon to denote AI insights.",
+      "CAMPAIGN TABLE: Implement the unified campaign list using Shadcn Table. Include Platform tags (Meta Ads, Google Ads) using custom colored Badges. Add a 'Status' column (Active/Paused).",
+      "CAMPAIGN DETAIL: Provide pause/enable/edit actions using Shadcn DropdownMenu or specialized icon buttons. Never use raw HTML inputs.",
+      "TESTING: Add `data-testid` to all critical interaction points (e.g., `data-testid=\"workspace-switcher\"`, `data-testid=\"metric-card-roas\"`, `data-testid=\"login-submit-button\"`).",
+      "AUTH PAGE: Build a split-screen login page using the `login_background` media URL on one half, and the emergent Google login + email/password form on the other."
+    ]
+  }
+}
