@@ -6,9 +6,10 @@ import { Link } from "react-router-dom";
 
 const PAGE_TITLES = {
   "/dashboard": "Overview",
+  "/intelligence": "Brand Intelligence",
   "/campaigns": "Campaigns",
   "/analytics": "Analytics",
-  "/datasets": "Datasets",
+  "/datasets": "Data Sources",
   "/accounts": "Ad Accounts",
   "/audit": "AI Audit",
   "/alerts": "Alerts",

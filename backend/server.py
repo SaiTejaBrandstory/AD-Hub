@@ -1036,14 +1036,82 @@ async def delete_dataset(dataset_id: str, user: User = Depends(get_current_user)
     if doc["workspace_id"] not in ids:
         raise HTTPException(status_code=403, detail="No access")
     await db.datasets.update_one({"dataset_id": dataset_id}, {"$set": {"is_deleted": True}})
+    # Invalidate brand intelligence so it rebuilds without this dataset
+    await db.brand_intelligence.delete_one({"workspace_id": doc["workspace_id"]})
     return {"ok": True}
+
+
+# ============================================================
+# BRAND INTELLIGENCE (collective dashboard across all uploaded datasets)
+# ============================================================
+@api_router.get("/workspaces/{workspace_id}/intelligence")
+async def get_brand_intelligence(workspace_id: str, refresh: bool = False,
+                                  user: User = Depends(get_current_user)):
+    ids = await user_workspaces(user)
+    if workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    from brand_intelligence import compute_intelligence
+    if refresh:
+        await db.brand_intelligence.delete_one({"workspace_id": workspace_id})
+    existing = await db.brand_intelligence.find_one({"workspace_id": workspace_id}, {"_id": 0})
+    if existing:
+        return existing
+    intel = await compute_intelligence(db, workspace_id)
+    return intel
+
+
+@api_router.get("/workspaces/{workspace_id}/chat")
+async def get_brand_chat(workspace_id: str, user: User = Depends(get_current_user)):
+    ids = await user_workspaces(user)
+    if workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    thread = await db.brand_chats.find_one({"workspace_id": workspace_id}, {"_id": 0})
+    return thread or {"workspace_id": workspace_id, "messages": []}
+
+
+@api_router.post("/workspaces/{workspace_id}/chat")
+async def send_brand_chat(workspace_id: str, req: ChatSendReq,
+                          user: User = Depends(get_current_user)):
+    ids = await user_workspaces(user)
+    if workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    from brand_intelligence import chat_with_brand
+
+    thread_doc = await db.brand_chats.find_one({"workspace_id": workspace_id}, {"_id": 0}) or {
+        "workspace_id": workspace_id, "messages": []
+    }
+    messages = thread_doc.get("messages", [])
+    user_msg = {"role": "user", "content": req.message,
+                "at": datetime.now(timezone.utc).isoformat()}
+    messages.append(user_msg)
+
+    try:
+        reply = await chat_with_brand(db, workspace_id, messages, req.message)
+    except Exception as e:
+        logger.exception("Brand chat failed")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+
+    assistant_msg = {"role": "assistant", "content": reply,
+                     "at": datetime.now(timezone.utc).isoformat()}
+    messages.append(assistant_msg)
+
+    await db.brand_chats.update_one(
+        {"workspace_id": workspace_id},
+        {"$set": {
+            "workspace_id": workspace_id,
+            "messages": messages,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"reply": reply, "user_message": user_msg, "assistant_message": assistant_msg}
 
 
 @api_router.post("/datasets/{dataset_id}/analyze")
 async def analyze_dataset(dataset_id: str, user: User = Depends(get_current_user)):
     """Parse file → detect platform → compute digest → AI dashboard. Saves & returns dashboard."""
     from storage import get_object
-    from ingest import parse_file, detect_platform, infer_columns, compute_digest, analyze_with_claude
+    from ingest import parse_file, detect_platform, infer_columns, compute_digest, analyze_with_claude, classify_dimension
 
     ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
     if not ds:
@@ -1060,6 +1128,7 @@ async def analyze_dataset(dataset_id: str, user: User = Depends(get_current_user
         if len(df) == 0:
             raise ValueError("File has no rows")
         platform = detect_platform(list(df.columns))
+        dimension = classify_dimension(list(df.columns))
         mapping = infer_columns(df)
         digest = compute_digest(df, mapping)
         ai = await analyze_with_claude(platform, digest)
@@ -1073,6 +1142,7 @@ async def analyze_dataset(dataset_id: str, user: User = Depends(get_current_user
         "dataset_id": dataset_id,
         "workspace_id": ds["workspace_id"],
         "platform": platform,
+        "dimension": dimension,
         "digest": digest,
         "headline": ai.get("headline"),
         "score": ai.get("score"),
@@ -1085,8 +1155,11 @@ async def analyze_dataset(dataset_id: str, user: User = Depends(get_current_user
     )
     await db.datasets.update_one(
         {"dataset_id": dataset_id},
-        {"$set": {"status": "ready", "platform": platform, "row_count": digest["row_count"]}},
+        {"$set": {"status": "ready", "platform": platform,
+                  "dimension": dimension, "row_count": digest["row_count"]}},
     )
+    # Invalidate brand intelligence so it rebuilds on next fetch
+    await db.brand_intelligence.delete_one({"workspace_id": ds["workspace_id"]})
     dashboard_doc.pop("_id", None)
     return dashboard_doc
 

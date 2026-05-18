@@ -118,8 +118,8 @@ export default function Datasets() {
       <div>
         <div className="flex items-baseline justify-between mb-3">
           <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-ink-400">Datasets</div>
-            <h2 className="font-display font-bold text-xl mt-0.5">Analyzed snapshots</h2>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-ink-400">Data sources</div>
+            <h2 className="font-display font-bold text-xl mt-0.5">Uploaded lenses</h2>
           </div>
           <span className="text-xs font-num text-ink-400">{datasets.length} total</span>
         </div>

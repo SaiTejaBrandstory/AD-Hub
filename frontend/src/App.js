@@ -16,6 +16,7 @@ import Analytics from "./pages/Analytics";
 import AdminUsers from "./pages/AdminUsers";
 import Datasets from "./pages/Datasets";
 import DatasetDetail from "./pages/DatasetDetail";
+import Intelligence from "./pages/Intelligence";
 import { Toaster } from "./components/ui/sonner";
 
 function AppRouter() {
@@ -37,6 +38,7 @@ function AppRouter() {
         <Route path="/audit" element={<Audit />} />
         <Route path="/alerts" element={<Alerts />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/intelligence" element={<Intelligence />} />
         <Route path="/datasets" element={<Datasets />} />
         <Route path="/datasets/:id" element={<DatasetDetail />} />
         <Route path="/admin/users" element={<AdminUsers />} />

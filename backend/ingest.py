@@ -55,23 +55,86 @@ def detect_platform(headers: list) -> str:
     return best if best_score >= 3 else "generic"
 
 
+def _detect_header_row(buf, encoding="utf-8") -> int:
+    """Google Ads / Meta exports often have 1-5 rows of metadata above the real header.
+    Find the first row that looks like a true header (mostly non-numeric strings,
+    >=3 columns, no $/% signs typical of value rows)."""
+    import csv as _csv
+    buf.seek(0)
+    try:
+        text = buf.read().decode(encoding, errors="ignore")
+    finally:
+        buf.seek(0)
+    rows = list(_csv.reader(io.StringIO(text)))[:15]
+    for i, row in enumerate(rows):
+        cells = [c.strip() for c in row if c.strip()]
+        if len(cells) < 3:
+            continue
+        # value-looking cells (numbers, $, %)
+        numeric = sum(1 for c in cells if any(ch.isdigit() for ch in c) and len(c) < 15)
+        if numeric > len(cells) // 2:
+            continue
+        # header should mostly be plain words
+        wordlike = sum(1 for c in cells if any(ch.isalpha() for ch in c) and len(c) < 60)
+        if wordlike >= max(3, len(cells) - 1):
+            return i
+    return 0
+
+
 def parse_file(data: bytes, filename: str) -> pd.DataFrame:
     ext = filename.lower().rsplit(".", 1)[-1]
     buf = io.BytesIO(data)
     if ext in ("csv", "txt"):
-        # Try utf-8 first, then latin-1
         for enc in ("utf-8", "utf-8-sig", "latin-1"):
             try:
                 buf.seek(0)
-                return pd.read_csv(buf, encoding=enc, on_bad_lines="skip", low_memory=False)
+                skip = _detect_header_row(buf, enc)
+                buf.seek(0)
+                df = pd.read_csv(buf, encoding=enc, skiprows=skip, on_bad_lines="skip",
+                                 low_memory=False)
+                # Drop fully-empty rows + a possible totals row
+                df = df.dropna(how="all")
+                # Drop rows where the first column says 'Total' / 'Totals'
+                first_col = df.columns[0]
+                df = df[~df[first_col].astype(str).str.strip().str.lower().isin(
+                    {"total", "totals", "grand total", "--"})]
+                return df.reset_index(drop=True)
             except UnicodeDecodeError:
                 continue
         raise ValueError("Unable to decode CSV file")
     if ext in ("xlsx", "xlsm"):
-        return pd.read_excel(buf, engine="openpyxl")
+        return pd.read_excel(buf, engine="openpyxl").dropna(how="all").reset_index(drop=True)
     if ext == "xls":
-        return pd.read_excel(buf, engine="xlrd")
+        return pd.read_excel(buf, engine="xlrd").dropna(how="all").reset_index(drop=True)
     raise ValueError(f"Unsupported file type: {ext}")
+
+
+def classify_dimension(columns: list) -> str:
+    """Classify a dataset by its primary dimension based on column names."""
+    cols = [str(c).lower().strip() for c in columns]
+
+    def has(*kws):
+        return any(any(kw in c for c in cols) for kw in kws)
+
+    if has("hour", "day of week", "time of day"):
+        return "temporal"
+    if has("country", "region", "metro", "city", "location"):
+        return "geographic"
+    if has("search term", "search query", "keyword"):
+        return "keyword"
+    if has("video", "asset", "thumbnail", "creative", "ad name", "youtube"):
+        return "creative"
+    if has("age", "gender", "audience", "segment", "demographic"):
+        return "audience"
+    if has("device", "placement", "network"):
+        return "device"
+    if has("quality score", "expected ctr", "landing page experience", "ad relevance"):
+        return "quality"
+    if has("ad group", "adset", "ad set"):
+        return "ad_group_level"
+    if has("campaign"):
+        return "campaign_level"
+    return "account_level"
 
 
 # ----- Column inference -----
@@ -104,10 +167,10 @@ def infer_columns(df: pd.DataFrame) -> dict:
 
 
 def _safe_numeric(s: pd.Series) -> pd.Series:
-    if s.dtype == object:
-        # strip currency symbols and commas
+    if not pd.api.types.is_numeric_dtype(s):
+        # strip currency symbols and commas from any string-like column
         s = s.astype(str).str.replace(r"[\$,£€¥₹%]", "", regex=True).str.replace(",", "").str.strip()
-        s = s.replace({"--": None, "-": None, "": None, "nan": None})
+        s = s.replace({"--": None, "-": None, "": None, "nan": None, "<NA>": None})
     return pd.to_numeric(s, errors="coerce")
 
 
@@ -151,27 +214,47 @@ def compute_digest(df: pd.DataFrame, mapping: dict) -> dict:
     if "spend" in totals and "conversions" in totals and totals["conversions"]:
         kpis["cpa"] = round(totals["spend"] / totals["conversions"], 2)
 
-    # Top campaigns
+    # Top entities (grouped by primary dimension: campaign, country, search term, etc.)
     top_campaigns = []
-    if "campaign" in mapping and "spend" in mapping:
-        camp_col = mapping["campaign"]
+    # Find primary grouping column
+    group_col = mapping.get("campaign")
+    if not group_col:
+        # First string-like column that isn't the date
+        date_col = mapping.get("date")
+        for c in df.columns:
+            if c == date_col:
+                continue
+            # Treat anything that isn't a numeric dtype as a candidate grouping column
+            if not pd.api.types.is_numeric_dtype(df[c]):
+                group_col = c
+                break
+    if group_col and "spend" in mapping:
         spend_col = mapping["spend"]
         tmp = df.copy()
         tmp[spend_col] = _safe_numeric(tmp[spend_col])
         if "revenue" in mapping: tmp["_rev"] = _safe_numeric(tmp[mapping["revenue"]])
         if "conversions" in mapping: tmp["_conv"] = _safe_numeric(tmp[mapping["conversions"]])
+        if "roas" in mapping: tmp["_roas"] = _safe_numeric(tmp[mapping["roas"]])
+        if "ctr" in mapping: tmp["_ctr"] = _safe_numeric(tmp[mapping["ctr"]])
         agg = {spend_col: "sum"}
         if "_rev" in tmp.columns: agg["_rev"] = "sum"
         if "_conv" in tmp.columns: agg["_conv"] = "sum"
-        grouped = tmp.groupby(camp_col, dropna=True).agg(agg).reset_index()
-        grouped = grouped.sort_values(spend_col, ascending=False).head(10)
+        if "_roas" in tmp.columns: agg["_roas"] = "mean"
+        if "_ctr" in tmp.columns: agg["_ctr"] = "mean"
+        grouped = tmp.groupby(group_col, dropna=True).agg(agg).reset_index()
+        grouped = grouped.sort_values(spend_col, ascending=False).head(15)
         for _, r in grouped.iterrows():
-            entry = {"campaign": str(r[camp_col])[:80], "spend": round(float(r[spend_col]), 2)}
+            entry = {"campaign": str(r[group_col])[:80], "spend": round(float(r[spend_col]), 2)}
             if "_rev" in grouped.columns and pd.notna(r.get("_rev")):
                 entry["revenue"] = round(float(r["_rev"]), 2)
-                entry["roas"] = round(entry["revenue"] / max(entry["spend"], 1), 2)
+                if entry["spend"] > 0:
+                    entry["roas"] = round(entry["revenue"] / entry["spend"], 2)
             if "_conv" in grouped.columns and pd.notna(r.get("_conv")):
                 entry["conversions"] = int(r["_conv"])
+            if "_roas" in grouped.columns and pd.notna(r.get("_roas")) and "roas" not in entry:
+                entry["roas"] = round(float(r["_roas"]), 2)
+            if "_ctr" in grouped.columns and pd.notna(r.get("_ctr")):
+                entry["ctr"] = round(float(r["_ctr"]), 2)
             top_campaigns.append(entry)
 
     # Time series (if date column exists)

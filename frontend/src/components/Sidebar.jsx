@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Gauge, ChartLineUp, MegaphoneSimple, PlugsConnected, Sparkle,
-  Bell, FileText, UsersThree, SignOut, CaretUpDown, Check, Plus, Database,
+  Bell, FileText, UsersThree, SignOut, CaretUpDown, Check, Plus, Database, Brain,
 } from "@phosphor-icons/react";
 import { useState } from "react";
 import {
@@ -17,13 +17,14 @@ import { toast } from "sonner";
 
 const nav = [
   { to: "/dashboard", label: "Overview", icon: Gauge },
+  { to: "/intelligence", label: "Intelligence", icon: Brain },
   { to: "/campaigns", label: "Campaigns", icon: MegaphoneSimple },
   { to: "/analytics", label: "Analytics", icon: ChartLineUp },
-  { to: "/datasets", label: "Datasets", icon: Database },
   { to: "/accounts", label: "Ad Accounts", icon: PlugsConnected },
   { to: "/audit", label: "AI Audit", icon: Sparkle },
   { to: "/alerts", label: "Alerts", icon: Bell },
   { to: "/reports", label: "Reports", icon: FileText },
+  { to: "/datasets", label: "Data Sources", icon: Database },
 ];
 
 export default function Sidebar() {
