@@ -57,8 +57,20 @@
 - ✅ Admin Users page (super_admin only): user list + assign-to-brand dialog
 
 ### Integrations live
-- ✅ Claude Sonnet 4.5 (Emergent LLM key) — AI audit
+- ✅ Claude Sonnet 4.5 (Emergent LLM key) — AI audit + dataset analysis + chat
 - ✅ Resend — transactional email + PDF attachments (testing mode: sends to verified addresses only)
+- ✅ Emergent Object Storage — CSV/XLSX file uploads, per-workspace path isolation
+- ✅ APScheduler — anomaly scan every 6 hours
+
+### Data Ingest (BYO-data feature, no OAuth required)
+- ✅ Drag-drop CSV/XLSX upload per brand workspace (each file = separate dataset)
+- ✅ Auto platform detection: Meta Ads, Google Ads, GA4, Twitter/X, LinkedIn, YouTube + generic
+- ✅ AI column mapping + KPI computation (spend, revenue, ROAS, CTR, CPC, conversions)
+- ✅ Claude generates dashboard JSON: headline + score + 5-8 insights + 3-5 chart specs
+- ✅ Renders to clean enterprise dashboard with Recharts (area, bar, line, pie)
+- ✅ Persistent chat thread per dashboard (Claude has dataset digest in context)
+- ✅ PDF export matching scheduled-reports style (KPI grid + chart + top campaigns + insights + AI verdict)
+- ✅ Immutable snapshots — saved with ingest date
 
 ### Real OAuth scaffolding
 See `/app/memory/oauth_application_guide.md` for the step-by-step Meta App Review + Google Ads Developer Token application process.

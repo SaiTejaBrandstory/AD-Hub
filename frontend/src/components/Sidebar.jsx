@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   Gauge, ChartLineUp, MegaphoneSimple, PlugsConnected, Sparkle,
-  Bell, FileText, UsersThree, SignOut, CaretUpDown, Check, Plus,
+  Bell, FileText, UsersThree, SignOut, CaretUpDown, Check, Plus, Database,
 } from "@phosphor-icons/react";
 import { useState } from "react";
 import {
@@ -19,6 +19,7 @@ const nav = [
   { to: "/dashboard", label: "Overview", icon: Gauge },
   { to: "/campaigns", label: "Campaigns", icon: MegaphoneSimple },
   { to: "/analytics", label: "Analytics", icon: ChartLineUp },
+  { to: "/datasets", label: "Datasets", icon: Database },
   { to: "/accounts", label: "Ad Accounts", icon: PlugsConnected },
   { to: "/audit", label: "AI Audit", icon: Sparkle },
   { to: "/alerts", label: "Alerts", icon: Bell },

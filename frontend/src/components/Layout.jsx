@@ -8,6 +8,7 @@ const PAGE_TITLES = {
   "/dashboard": "Overview",
   "/campaigns": "Campaigns",
   "/analytics": "Analytics",
+  "/datasets": "Datasets",
   "/accounts": "Ad Accounts",
   "/audit": "AI Audit",
   "/alerts": "Alerts",

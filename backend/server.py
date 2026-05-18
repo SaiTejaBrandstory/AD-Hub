@@ -21,6 +21,8 @@ from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from fastapi import UploadFile, File, Form
+from fastapi.responses import Response
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -932,6 +934,263 @@ async def send_report_now(report_id: str, user: User = Depends(get_current_user)
 
 
 # ============================================================
+# DATASET INGEST (CSV/XLSX upload + AI analysis + chat + PDF)
+# ============================================================
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatSendReq(BaseModel):
+    message: str
+
+
+@api_router.post("/datasets/upload")
+async def upload_dataset(
+    workspace_id: str = Form(...),
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Upload a CSV/XLSX file → store in object storage → create dataset doc."""
+    from storage import put_object, dataset_path
+    ids = await user_workspaces(user)
+    if workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access to workspace")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing filename")
+    ext = file.filename.lower().rsplit(".", 1)[-1] if "." in file.filename else ""
+    if ext not in ("csv", "xlsx", "xls", "xlsm", "txt"):
+        raise HTTPException(status_code=400, detail="Only CSV / XLSX files supported")
+
+    data = await file.read()
+    if len(data) > 200 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 200MB)")
+    if len(data) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    dataset_id = f"ds_{uuid.uuid4().hex[:12]}"
+    path = dataset_path(workspace_id, dataset_id, ext)
+    content_type = {
+        "csv": "text/csv", "txt": "text/plain",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "xls": "application/vnd.ms-excel",
+    }.get(ext, "application/octet-stream")
+
+    try:
+        result = put_object(path, data, content_type)
+    except Exception as e:
+        logger.exception("Object storage upload failed")
+        raise HTTPException(status_code=500, detail=f"Storage upload failed: {e}")
+
+    now = datetime.now(timezone.utc)
+    doc = {
+        "dataset_id": dataset_id,
+        "workspace_id": workspace_id,
+        "name": file.filename,
+        "filename": file.filename,
+        "storage_path": result["path"],
+        "size": result.get("size", len(data)),
+        "content_type": content_type,
+        "ext": ext,
+        "status": "uploaded",
+        "platform": None,
+        "row_count": None,
+        "created_at": now.isoformat(),
+        "created_by": user.user_id,
+        "is_deleted": False,
+    }
+    await db.datasets.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/datasets")
+async def list_datasets(workspace_id: str, user: User = Depends(get_current_user)):
+    ids = await user_workspaces(user)
+    if workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    docs = await db.datasets.find(
+        {"workspace_id": workspace_id, "is_deleted": False}, {"_id": 0}
+    ).sort("created_at", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/datasets/{dataset_id}")
+async def get_dataset(dataset_id: str, user: User = Depends(get_current_user)):
+    doc = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if doc["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    return doc
+
+
+@api_router.delete("/datasets/{dataset_id}")
+async def delete_dataset(dataset_id: str, user: User = Depends(get_current_user)):
+    doc = await db.datasets.find_one({"dataset_id": dataset_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if doc["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    await db.datasets.update_one({"dataset_id": dataset_id}, {"$set": {"is_deleted": True}})
+    return {"ok": True}
+
+
+@api_router.post("/datasets/{dataset_id}/analyze")
+async def analyze_dataset(dataset_id: str, user: User = Depends(get_current_user)):
+    """Parse file → detect platform → compute digest → AI dashboard. Saves & returns dashboard."""
+    from storage import get_object
+    from ingest import parse_file, detect_platform, infer_columns, compute_digest, analyze_with_claude
+
+    ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if ds["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+
+    await db.datasets.update_one({"dataset_id": dataset_id}, {"$set": {"status": "analyzing"}})
+
+    try:
+        data, _ = get_object(ds["storage_path"])
+        df = parse_file(data, ds["filename"])
+        if len(df) == 0:
+            raise ValueError("File has no rows")
+        platform = detect_platform(list(df.columns))
+        mapping = infer_columns(df)
+        digest = compute_digest(df, mapping)
+        ai = await analyze_with_claude(platform, digest)
+    except Exception as e:
+        logger.exception("Analyze failed")
+        await db.datasets.update_one({"dataset_id": dataset_id},
+                                      {"$set": {"status": "error", "error": str(e)}})
+        raise HTTPException(status_code=500, detail=f"Analyze failed: {e}")
+
+    dashboard_doc = {
+        "dataset_id": dataset_id,
+        "workspace_id": ds["workspace_id"],
+        "platform": platform,
+        "digest": digest,
+        "headline": ai.get("headline"),
+        "score": ai.get("score"),
+        "insights": ai.get("insights", []),
+        "charts": ai.get("charts", []),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dashboards.replace_one(
+        {"dataset_id": dataset_id}, dashboard_doc, upsert=True
+    )
+    await db.datasets.update_one(
+        {"dataset_id": dataset_id},
+        {"$set": {"status": "ready", "platform": platform, "row_count": digest["row_count"]}},
+    )
+    dashboard_doc.pop("_id", None)
+    return dashboard_doc
+
+
+@api_router.get("/datasets/{dataset_id}/dashboard")
+async def get_dashboard(dataset_id: str, user: User = Depends(get_current_user)):
+    ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if ds["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    dash = await db.dashboards.find_one({"dataset_id": dataset_id}, {"_id": 0})
+    if not dash:
+        raise HTTPException(status_code=404, detail="Not analyzed yet")
+    return dash
+
+
+@api_router.get("/datasets/{dataset_id}/chat")
+async def get_chat_thread(dataset_id: str, user: User = Depends(get_current_user)):
+    ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if ds["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    thread = await db.chat_threads.find_one({"dataset_id": dataset_id}, {"_id": 0})
+    return thread or {"dataset_id": dataset_id, "messages": []}
+
+
+@api_router.post("/datasets/{dataset_id}/chat")
+async def send_chat(dataset_id: str, req: ChatSendReq, user: User = Depends(get_current_user)):
+    from ingest import chat_with_dataset
+    ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if ds["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    dash = await db.dashboards.find_one({"dataset_id": dataset_id}, {"_id": 0})
+    if not dash:
+        raise HTTPException(status_code=400, detail="Run analyze first")
+
+    thread_doc = await db.chat_threads.find_one({"dataset_id": dataset_id}, {"_id": 0}) or {
+        "dataset_id": dataset_id, "workspace_id": ds["workspace_id"], "messages": [],
+    }
+    messages = thread_doc.get("messages", [])
+    user_msg = {"role": "user", "content": req.message,
+                "at": datetime.now(timezone.utc).isoformat()}
+    messages.append(user_msg)
+
+    try:
+        reply = await chat_with_dataset(dash["digest"], dash, messages, req.message)
+    except Exception as e:
+        logger.exception("Chat failed")
+        raise HTTPException(status_code=500, detail=f"Chat failed: {e}")
+
+    assistant_msg = {"role": "assistant", "content": reply,
+                     "at": datetime.now(timezone.utc).isoformat()}
+    messages.append(assistant_msg)
+
+    await db.chat_threads.update_one(
+        {"dataset_id": dataset_id},
+        {"$set": {
+            "dataset_id": dataset_id,
+            "workspace_id": ds["workspace_id"],
+            "messages": messages,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"reply": reply, "user_message": user_msg, "assistant_message": assistant_msg}
+
+
+@api_router.post("/datasets/{dataset_id}/pdf")
+async def export_dataset_pdf(dataset_id: str, user: User = Depends(get_current_user)):
+    from dataset_pdf import render_dataset_pdf
+    ds = await db.datasets.find_one({"dataset_id": dataset_id, "is_deleted": False}, {"_id": 0})
+    if not ds:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if ds["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    dash = await db.dashboards.find_one({"dataset_id": dataset_id}, {"_id": 0})
+    if not dash:
+        raise HTTPException(status_code=400, detail="Run analyze first")
+    ws = await db.workspaces.find_one({"workspace_id": ds["workspace_id"]}, {"_id": 0})
+    pdf_bytes = render_dataset_pdf(
+        workspace_name=ws["name"],
+        dataset_name=ds["filename"],
+        platform=dash.get("platform", "generic").replace("_", " ").title(),
+        ingest_date=ds["created_at"][:10],
+        digest=dash["digest"],
+        dashboard=dash,
+    )
+    filename = ds["filename"].rsplit(".", 1)[0] + "_report.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ============================================================
 # SEED on startup
 # ============================================================
 scheduler = AsyncIOScheduler(timezone="UTC")
@@ -956,7 +1215,12 @@ async def _scheduled_anomaly_scan():
 @app.on_event("startup")
 async def startup():
     from seed import seed_demo_data
+    from storage import init_storage
     await seed_demo_data(db)
+    try:
+        init_storage()
+    except Exception as e:
+        logger.warning("Object storage init deferred: %s", e)
     # Schedule cron every 6 hours
     scheduler.add_job(_scheduled_anomaly_scan, "interval", hours=6,
                       id="anomaly_scan", replace_existing=True, next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2))
