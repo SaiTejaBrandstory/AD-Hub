@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../components/ui/dialog";
 import { ArrowLeft, Pause, Play, PencilSimple } from "@phosphor-icons/react";
 import MetricCard from "../components/MetricCard";
 import { toast } from "sonner";
@@ -10,10 +12,13 @@ export default function CampaignDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [c, setC] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [budget, setBudget] = useState("");
 
   const load = async () => {
     const { data } = await api.get(`/campaigns/${id}`);
     setC(data);
+    setBudget(String(data.daily_budget));
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
 
@@ -22,6 +27,19 @@ export default function CampaignDetail() {
     await api.patch(`/campaigns/${id}/status`, { status: newStatus });
     toast.success(`Campaign ${newStatus}`);
     load();
+  };
+
+  const saveBudget = async () => {
+    const v = parseFloat(budget);
+    if (!v || v <= 0) { toast.error("Enter a positive amount"); return; }
+    try {
+      await api.patch(`/campaigns/${id}/budget`, { daily_budget: v });
+      toast.success(`Daily budget updated to $${v.toFixed(2)}`);
+      setEditOpen(false);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Update failed");
+    }
   };
 
   if (!c) return <div className="text-ink-400 text-sm">Loading…</div>;
@@ -45,7 +63,9 @@ export default function CampaignDetail() {
           <p className="text-sm text-ink-400 mt-1">Objective: {c.objective} · Started {c.start_date}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" data-testid="campaign-edit-btn"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>
+          <Button variant="outline" onClick={() => setEditOpen(true)} data-testid="campaign-edit-btn">
+            <PencilSimple size={14} className="mr-1.5" /> Edit budget
+          </Button>
           <Button onClick={toggle} className="bg-ink text-white hover:bg-ink-500" data-testid="campaign-toggle-btn">
             {c.status === "active" ? <><Pause size={14} weight="fill" className="mr-1.5" /> Pause</> : <><Play size={14} weight="fill" className="mr-1.5" /> Resume</>}
           </Button>
@@ -67,12 +87,44 @@ export default function CampaignDetail() {
         <div className="text-[10px] uppercase tracking-[0.2em] text-ink-400">Configuration</div>
         <h3 className="font-display font-bold text-lg mt-1 mb-4">Campaign settings</h3>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-          <Row k="Daily budget" v={`$${c.daily_budget}`} />
+          <Row k="Daily budget" v={`$${c.daily_budget?.toFixed(2)}`} />
           <Row k="Total spend" v={`$${c.spend}`} />
           <Row k="CPA" v={`$${c.cpa}`} />
           <Row k="External ID" v={c.campaign_id} />
         </dl>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Edit daily budget</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-ink-400">Daily budget (USD)</label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 font-num">$</span>
+                <Input
+                  type="number"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value)}
+                  className="pl-7 font-num"
+                  data-testid="budget-input"
+                  min="1"
+                  step="10"
+                />
+              </div>
+              <p className="text-[11px] text-ink-400 mt-2">
+                Current: <span className="font-num">${c.daily_budget?.toFixed(2)}</span>
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={saveBudget} data-testid="budget-save-btn">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

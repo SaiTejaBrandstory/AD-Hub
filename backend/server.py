@@ -119,6 +119,15 @@ class CampaignToggle(BaseModel):
     status: Literal["active", "paused"]
 
 
+class BulkStatusReq(BaseModel):
+    campaign_ids: List[str]
+    status: Literal["active", "paused"]
+
+
+class BudgetUpdateReq(BaseModel):
+    daily_budget: float
+
+
 class Alert(BaseModel):
     alert_id: str
     workspace_id: str
@@ -554,6 +563,40 @@ async def toggle_campaign(campaign_id: str, req: CampaignToggle, user: User = De
     return {"ok": True, "status": req.status}
 
 
+@api_router.post("/campaigns/bulk-status")
+async def bulk_status(req: BulkStatusReq, user: User = Depends(get_current_user)):
+    ids = await user_workspaces(user)
+    docs = await db.campaigns.find(
+        {"campaign_id": {"$in": req.campaign_ids}}, {"_id": 0, "campaign_id": 1, "workspace_id": 1}
+    ).to_list(500)
+    allowed = [d["campaign_id"] for d in docs if d["workspace_id"] in ids]
+    if not allowed:
+        raise HTTPException(status_code=403, detail="No accessible campaigns")
+    result = await db.campaigns.update_many(
+        {"campaign_id": {"$in": allowed}},
+        {"$set": {"status": req.status, "last_updated": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True, "updated": result.modified_count, "status": req.status}
+
+
+@api_router.patch("/campaigns/{campaign_id}/budget")
+async def update_budget(campaign_id: str, req: BudgetUpdateReq, user: User = Depends(get_current_user)):
+    if req.daily_budget <= 0:
+        raise HTTPException(status_code=400, detail="Budget must be positive")
+    doc = await db.campaigns.find_one({"campaign_id": campaign_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if doc["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    await db.campaigns.update_one(
+        {"campaign_id": campaign_id},
+        {"$set": {"daily_budget": round(req.daily_budget, 2),
+                  "last_updated": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True, "daily_budget": round(req.daily_budget, 2)}
+
+
 # ============================================================
 # ANALYTICS
 # ============================================================
@@ -808,6 +851,83 @@ async def list_users(user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Super admin only")
     docs = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
     return docs
+
+
+# ============================================================
+# ANOMALY DETECTION
+# ============================================================
+@api_router.post("/alerts/scan")
+async def scan_anomalies(workspace_id: Optional[str] = None, user: User = Depends(get_current_user)):
+    """Run anomaly detection across one (or all accessible) workspace(s)."""
+    from anomalies import scan_workspace
+    ids = await user_workspaces(user)
+    targets = [workspace_id] if workspace_id and workspace_id in ids else ids
+    if workspace_id and workspace_id not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    total = []
+    for wid in targets:
+        new_alerts = await scan_workspace(db, wid)
+        for a in new_alerts:
+            a.pop("_id", None)
+        total.extend(new_alerts)
+    return {"ok": True, "new_alerts": len(total), "alerts": total}
+
+
+# ============================================================
+# REPORT EMAIL DELIVERY
+# ============================================================
+@api_router.post("/reports/{report_id}/send")
+async def send_report_now(report_id: str, user: User = Depends(get_current_user)):
+    """Render PDF + email via Resend to the report's configured recipients."""
+    from reports_email import build_pdf, send_report_email, build_email_html
+    rep = await db.reports.find_one({"report_id": report_id}, {"_id": 0})
+    if not rep:
+        raise HTTPException(status_code=404, detail="Not found")
+    ids = await user_workspaces(user)
+    if rep["workspace_id"] not in ids:
+        raise HTTPException(status_code=403, detail="No access")
+    if not rep.get("recipients"):
+        raise HTTPException(status_code=400, detail="No recipients configured")
+
+    ws = await db.workspaces.find_one({"workspace_id": rep["workspace_id"]}, {"_id": 0})
+    # Build overview inline (reuse analytics_overview logic)
+    docs = await db.campaigns.find({"workspace_id": rep["workspace_id"]}, {"_id": 0}).to_list(1000)
+    if not docs:
+        raise HTTPException(status_code=400, detail="No campaigns to report")
+    spend = sum(d["spend"] for d in docs); imp = sum(d["impressions"] for d in docs)
+    clicks = sum(d["clicks"] for d in docs); conv = sum(d["conversions"] for d in docs)
+    rev = sum(d["revenue"] for d in docs)
+    by_platform = {}
+    for d in docs:
+        p = d["platform"]
+        by_platform.setdefault(p, {"spend": 0, "revenue": 0, "conversions": 0, "campaigns": 0})
+        by_platform[p]["spend"] += d["spend"]; by_platform[p]["revenue"] += d["revenue"]
+        by_platform[p]["conversions"] += d["conversions"]; by_platform[p]["campaigns"] += 1
+    overview = {
+        "spend": round(spend, 2), "impressions": imp, "clicks": clicks,
+        "ctr": round((clicks / imp) * 100, 2) if imp else 0,
+        "cpc": round(spend / clicks, 2) if clicks else 0,
+        "conversions": conv, "cpa": round(spend / conv, 2) if conv else 0,
+        "revenue": round(rev, 2), "roas": round(rev / spend, 2) if spend else 0,
+        "platforms": {k: {kk: round(vv, 2) if isinstance(vv, float) else vv
+                          for kk, vv in v.items()} for k, v in by_platform.items()},
+    }
+
+    try:
+        pdf = build_pdf(ws["name"], overview, docs)
+        html = build_email_html(ws["name"], overview)
+        subject = f"{ws['name']} – {rep['name']}"
+        filename = f"{ws['name'].replace(' ', '_')}_report.pdf"
+        result = await send_report_email(rep["recipients"], subject, html, pdf, filename)
+    except Exception as e:
+        logger.exception("Send report failed")
+        raise HTTPException(status_code=500, detail=f"Email send failed: {str(e)}")
+
+    await db.reports.update_one(
+        {"report_id": report_id},
+        {"$set": {"last_sent": datetime.now(timezone.utc).isoformat()}},
+    )
+    return {"ok": True, "email_id": result.get("id"), "recipients": rep["recipients"]}
 
 
 # ============================================================

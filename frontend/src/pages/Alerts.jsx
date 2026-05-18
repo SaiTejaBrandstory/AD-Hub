@@ -1,26 +1,65 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Warning, Info, Bell } from "@phosphor-icons/react";
+import { Button } from "../components/ui/button";
+import { Warning, Info, Bell, Sparkle } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 const SEV = {
-  critical: { Icon: Warning, cls: "text-danger bg-danger/10 border-danger/30", dot: "bg-danger" },
-  warning: { Icon: Warning, cls: "text-warning bg-warning/10 border-warning/30", dot: "bg-warning" },
-  info: { Icon: Info, cls: "text-info bg-info/10 border-info/30", dot: "bg-info" },
+  critical: { Icon: Warning, cls: "text-danger bg-danger/10 border-danger/30" },
+  warning: { Icon: Warning, cls: "text-warning bg-warning/10 border-warning/30" },
+  info: { Icon: Info, cls: "text-info bg-info/10 border-info/30" },
 };
 
 export default function Alerts() {
   const { activeWorkspaceId } = useAuth();
   const [alerts, setAlerts] = useState([]);
+  const [scanning, setScanning] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!activeWorkspaceId) return;
-    api.get("/alerts", { params: { workspace_id: activeWorkspaceId } })
-      .then(({ data }) => setAlerts(data));
-  }, [activeWorkspaceId]);
+    const { data } = await api.get("/alerts", { params: { workspace_id: activeWorkspaceId } });
+    setAlerts(data);
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [activeWorkspaceId]);
+
+  const scan = async () => {
+    setScanning(true);
+    try {
+      const { data } = await api.post(`/alerts/scan?workspace_id=${activeWorkspaceId}`);
+      if (data.new_alerts > 0) {
+        toast.success(`${data.new_alerts} new anomal${data.new_alerts === 1 ? "y" : "ies"} detected`);
+      } else {
+        toast.success("No new anomalies — account is healthy");
+      }
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Scan failed");
+    } finally {
+      setScanning(false);
+    }
+  };
 
   return (
-    <div className="space-y-4" data-testid="alerts-page">
+    <div className="space-y-5" data-testid="alerts-page">
+      <div className="flex flex-wrap items-center justify-between gap-3 ai-card rounded-xl p-5">
+        <div className="flex items-start gap-3 max-w-2xl">
+          <div className="w-10 h-10 rounded-lg bg-info text-white flex items-center justify-center shrink-0">
+            <Sparkle size={18} weight="fill" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-info">Anomaly detection</div>
+            <h2 className="font-display font-bold text-xl mt-0.5 text-ink">Scan for performance anomalies</h2>
+            <p className="text-xs text-ink-400 mt-1">
+              Runs threshold checks across every active campaign — flags ROAS drops, CPA spikes, CTR weakness, and budget pacing.
+            </p>
+          </div>
+        </div>
+        <Button onClick={scan} disabled={scanning} className="bg-ink text-white hover:bg-ink-500" data-testid="run-scan-btn">
+          {scanning ? "Scanning…" : "Run scan"}
+        </Button>
+      </div>
+
       <div className="bg-white border border-ink-200 rounded-xl divide-y divide-ink-200">
         {alerts.length === 0 ? (
           <div className="p-10 text-center">

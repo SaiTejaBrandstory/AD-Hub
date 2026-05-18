@@ -22,16 +22,20 @@
 - **Auth**: Dual — JWT bearer (password) + httpOnly session_token cookie (Google)
 
 ## What's Implemented (2026-05-18)
-### Backend (`server.py`, `seed.py`)
+### Backend (`server.py`, `seed.py`, `anomalies.py`, `reports_email.py`)
 - ✅ Email/password register + login (bcrypt + JWT 7-day)
 - ✅ Emergent Google OAuth via `/api/auth/google/session` (X-Session-ID header)
 - ✅ Dual-auth dependency resolves cookie OR bearer
 - ✅ Workspaces (brands) CRUD with multi-tenant `memberships` table
 - ✅ Ad accounts: list / connect (mock OAuth) / disconnect — Meta / Google Ads / GA4
 - ✅ Campaigns: list with filters (platform, status), get by id, PATCH status (pause/resume)
+- ✅ **Bulk pause/resume** via `POST /api/campaigns/bulk-status`
+- ✅ **Campaign budget edit** via `PATCH /api/campaigns/{id}/budget`
 - ✅ Analytics: overview (spend, revenue, ROAS, CTR, CPC, conversions, platform breakdown), timeseries (7/30/90 day daily series)
 - ✅ Alerts feed (seeded critical/warning/info)
+- ✅ **Anomaly detection scan** via `POST /api/alerts/scan` — flags ROAS, CTR, CPA, budget anomalies
 - ✅ Reports: schedule + list
+- ✅ **Send report email with PDF attachment** via `POST /api/reports/{id}/send` (Resend integration)
 - ✅ AI audit via Claude Sonnet 4.5 (Emergent LLM key) with heuristic fallback
 - ✅ Admin: list all users, assign members to brands
 - ✅ Auto-seed on startup: 3 brands, 9 ad accounts, ~30 campaigns, 12 alerts, 3 reports, 3 demo users
@@ -43,14 +47,21 @@
 - ✅ Sidebar with workspace switcher dropdown, role-aware nav, user menu
 - ✅ Glass-morphic sticky header with page title + brand chip + search + alerts bell
 - ✅ Dashboard: 8 KPI tiles, Spend vs Revenue area chart, Platform mix bar chart, AI audit CTA, alerts feed
-- ✅ Campaigns table with platform/status filters, ROAS color coding, pause/play toggle
-- ✅ Campaign detail page with metrics + pause/resume
+- ✅ Campaigns table with platform/status filters, ROAS color coding, **bulk-select checkboxes + bulk action bar**, pause/play toggle
+- ✅ Campaign detail page with metrics + pause/resume + **Edit budget dialog**
 - ✅ Accounts page: 3 connector cards + linked accounts table
 - ✅ AI Audit page: Run audit, get scored recommendations from Claude
-- ✅ Alerts page: full severity feed
-- ✅ Reports page: list + schedule new (daily/weekly/monthly)
+- ✅ Alerts page: full severity feed + **"Run scan" anomaly detection button**
+- ✅ Reports page: list + schedule new + **"Send now" button per report** + Resend testing-mode notice
 - ✅ Analytics page: multi-metric trend lines (7/30/90 day toggle)
 - ✅ Admin Users page (super_admin only): user list + assign-to-brand dialog
+
+### Integrations live
+- ✅ Claude Sonnet 4.5 (Emergent LLM key) — AI audit
+- ✅ Resend — transactional email + PDF attachments (testing mode: sends to verified addresses only)
+
+### Real OAuth scaffolding
+See `/app/memory/oauth_application_guide.md` for the step-by-step Meta App Review + Google Ads Developer Token application process.
 
 ## Demo Accounts (seeded)
 | Role | Email | Password |
