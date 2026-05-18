@@ -20,6 +20,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, timezone, timedelta
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -933,14 +934,42 @@ async def send_report_now(report_id: str, user: User = Depends(get_current_user)
 # ============================================================
 # SEED on startup
 # ============================================================
+scheduler = AsyncIOScheduler(timezone="UTC")
+
+
+async def _scheduled_anomaly_scan():
+    """Runs every 6 hours: scans every workspace for anomalies and inserts alerts."""
+    from anomalies import scan_workspace
+    try:
+        all_ws = await db.workspaces.find({}, {"_id": 0, "workspace_id": 1, "name": 1}).to_list(500)
+        total = 0
+        for w in all_ws:
+            new = await scan_workspace(db, w["workspace_id"])
+            total += len(new)
+            if new:
+                logger.info("Anomaly scan %s -> %d new alerts", w["name"], len(new))
+        logger.info("Anomaly scan complete: %d new alerts across %d brands", total, len(all_ws))
+    except Exception:
+        logger.exception("Scheduled anomaly scan failed")
+
+
 @app.on_event("startup")
 async def startup():
     from seed import seed_demo_data
     await seed_demo_data(db)
+    # Schedule cron every 6 hours
+    scheduler.add_job(_scheduled_anomaly_scan, "interval", hours=6,
+                      id="anomaly_scan", replace_existing=True, next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2))
+    scheduler.start()
+    logger.info("Scheduler started — anomaly scan every 6h, first run in 2 min")
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception:
+        pass
     client.close()
 
 
