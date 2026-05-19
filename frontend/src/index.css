@@ -5,6 +5,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide Emergent "Made with Emergent" branding badge */
+#emergent-badge,
+[id="emergent-badge"],
+a[href*="app.emergent.sh"],
+a[href*="emergent.sh"][target="_blank"],
+a[href*="utm_source=emergent-badge"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
