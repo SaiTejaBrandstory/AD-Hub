@@ -58,7 +58,14 @@ AdHub is two apps + MongoDB:
 
 Or use the repo’s **`render.yaml`**: **New → Blueprint** → select `AD-Hub` (creates API + static site).
 
-**Build error `No such file or directory: requirements.txt`:** Root Directory is blank or wrong — set it to `backend`.
+**Build error `No such file or directory: requirements.txt`:** Either set **Root Directory** to `backend`, **or** keep root empty and use:
+
+| Root Directory | Build Command | Start Command |
+|----------------|---------------|---------------|
+| *(empty)* | `pip install -r requirements.txt` | `cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT` |
+| `backend` | `chmod +x build.sh && ./build.sh` | `uvicorn server:app --host 0.0.0.0 --port $PORT` |
+
+Also set env **`PYTHON_VERSION`** = `3.11.11` (stops Python 3.14).
 
 ---
 

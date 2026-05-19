@@ -1,0 +1,2 @@
+# Render builds from repo root by default — install backend prod deps.
+-r backend/requirements-prod.txt
