@@ -304,7 +304,7 @@ Always return strict JSON only — no markdown fences, no prose outside JSON.
 
 async def analyze_with_claude(platform: str, digest: dict) -> dict:
     """Returns: {headline, score, insights:[{title,severity,detail,action}], charts:[...] }"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from llm_client import complete_json
 
     digest_compact = {
         "row_count": digest["row_count"],
@@ -348,22 +348,10 @@ Dataset digest:
 {json.dumps(digest_compact, default=str)}
 """
 
-    chat = LlmChat(
-        api_key=os.environ["EMERGENT_LLM_KEY"],
-        session_id=f"ingest_{uuid.uuid4().hex[:8]}",
-        system_message=_system_message(platform),
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-    raw = await chat.send_message(UserMessage(text=prompt))
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:]
-        text = text.strip()
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.exception("Could not parse AI response, returning fallback")
+        return await complete_json(_system_message(platform), prompt)
+    except Exception:
+        logger.exception("AI analyze failed, returning heuristic fallback")
         return _fallback_analysis(digest)
 
 
@@ -404,7 +392,7 @@ def _fallback_analysis(digest: dict) -> dict:
 # ----- Chat (persistent thread per dataset) -----
 async def chat_with_dataset(digest: dict, dashboard: dict, thread: list, user_msg: str) -> str:
     """Returns assistant reply. Caller saves thread."""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from llm_client import complete_text
     context = {
         "kpis": digest["kpis"],
         "top_campaigns": digest["top_campaigns"][:10],
@@ -431,10 +419,4 @@ Conversation so far:
 User: {user_msg}
 Assistant:"""
 
-    chat = LlmChat(
-        api_key=os.environ["EMERGENT_LLM_KEY"],
-        session_id=f"chat_{uuid.uuid4().hex[:8]}",
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-    reply = await chat.send_message(UserMessage(text=prompt))
-    return reply.strip()
+    return (await complete_text(system, prompt)).strip()

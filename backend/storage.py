@@ -2,6 +2,7 @@
 import os
 import requests
 import logging
+from pathlib import Path
 
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "adhub"
@@ -10,14 +11,29 @@ logger = logging.getLogger("adhub.storage")
 _storage_key = None
 
 
+def _emergent_api_key() -> str:
+    """Read EMERGENT_LLM_KEY from env, reloading backend/.env if needed."""
+    key = (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+    if key:
+        return key
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
+    except Exception:
+        pass
+    return (os.environ.get("EMERGENT_LLM_KEY") or "").strip()
+
+
 def init_storage():
     """Call once at startup; returns session-scoped storage key."""
     global _storage_key
     if _storage_key:
         return _storage_key
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    api_key = _emergent_api_key()
     if not api_key:
-        raise RuntimeError("EMERGENT_LLM_KEY not configured")
+        raise RuntimeError(
+            "EMERGENT_LLM_KEY not configured — set it in backend/.env and restart the API"
+        )
     resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": api_key}, timeout=30)
     resp.raise_for_status()
     _storage_key = resp.json()["storage_key"]

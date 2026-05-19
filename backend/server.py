@@ -734,21 +734,12 @@ Campaign data:
 """
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(
-            api_key=os.environ["EMERGENT_LLM_KEY"],
-            session_id=f"audit_{uuid.uuid4().hex[:8]}",
-            system_message="You are a senior paid-media strategist. Output strict JSON only.",
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        raw = await chat.send_message(UserMessage(text=prompt))
+        from llm_client import complete_json
         import json
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        result = json.loads(text)
+        result = await complete_json(
+            "You are a senior paid-media strategist. Output strict JSON only.",
+            prompt,
+        )
     except Exception as e:
         logger.exception("AI audit failed, falling back to heuristic")
         # Heuristic fallback

@@ -222,20 +222,11 @@ Brand digest:
 """
 
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(
-            api_key=os.environ["EMERGENT_LLM_KEY"],
-            session_id=f"brand_{uuid.uuid4().hex[:8]}",
-            system_message="You are a senior paid-media strategist. Output strict JSON only.",
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        raw = await chat.send_message(UserMessage(text=prompt))
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.lower().startswith("json"):
-                text = text[4:]
-            text = text.strip()
-        return json.loads(text)
+        from llm_client import complete_json
+        return await complete_json(
+            "You are a senior paid-media strategist. Output strict JSON only.",
+            prompt,
+        )
     except Exception:
         logger.exception("Brand verdict generation failed, using fallback")
         return {
@@ -249,7 +240,7 @@ Brand digest:
 
 async def chat_with_brand(db, workspace_id: str, history: list, user_msg: str) -> str:
     """Brand-level chat with full context of every connected dataset."""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    from llm_client import complete_text
 
     intel = await db.brand_intelligence.find_one({"workspace_id": workspace_id}, {"_id": 0})
     if not intel:
@@ -313,10 +304,4 @@ Conversation so far:
 User: {user_msg}
 Assistant:"""
 
-    chat = LlmChat(
-        api_key=os.environ["EMERGENT_LLM_KEY"],
-        session_id=f"brandchat_{uuid.uuid4().hex[:8]}",
-        system_message=system,
-    ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-    reply = await chat.send_message(UserMessage(text=prompt))
-    return reply.strip()
+    return (await complete_text(system, prompt)).strip()
