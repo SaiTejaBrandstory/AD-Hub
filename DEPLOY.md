@@ -62,7 +62,7 @@ Or use the repo’s **`render.yaml`**: **New → Blueprint** → select `AD-Hub`
 
 | Root Directory | Build Command | Start Command |
 |----------------|---------------|---------------|
-| *(empty)* | `pip install -r requirements.txt` | `cd backend && uvicorn server:app --host 0.0.0.0 --port $PORT` |
+| *(empty)* | `pip install -r requirements.txt` | `chmod +x start.sh && ./start.sh` |
 | `backend` | `chmod +x build.sh && ./build.sh` | `uvicorn server:app --host 0.0.0.0 --port $PORT` |
 
 Also set env **`PYTHON_VERSION`** = `3.11.11` (stops Python 3.14).

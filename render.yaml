@@ -6,9 +6,9 @@ services:
   - type: web
     name: adhub-api
     runtime: python
-    rootDir: backend
-    buildCommand: chmod +x build.sh && ./build.sh
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    # rootDir empty = use repo-root requirements.txt + start.sh
+    buildCommand: pip install -r requirements.txt
+    startCommand: chmod +x start.sh && ./start.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.11"
