@@ -51,6 +51,11 @@ let webpackConfig = {
         ],
       };
 
+      // Remove TS checker — JS project; avoids ajv v6/v8 conflicts in nested deps
+      webpackConfig.plugins = webpackConfig.plugins.filter(
+        (plugin) => plugin?.constructor?.name !== "ForkTsCheckerWebpackPlugin"
+      );
+
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);

@@ -32,7 +32,16 @@ export default function Login() {
       }
       navigate("/dashboard");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Authentication failed");
+      const detail = err.response?.data?.detail;
+      if (!err.response) {
+        toast.error(
+          "Cannot reach the API. Start the backend on port 8000, then open the app at http://localhost:3000 (not 127.0.0.1)."
+        );
+      } else {
+        toast.error(
+          typeof detail === "string" ? detail : Array.isArray(detail) ? detail[0]?.msg : "Authentication failed"
+        );
+      }
     } finally {
       setBusy(false);
     }
