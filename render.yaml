@@ -1,14 +1,17 @@
 # Render Blueprint — AdHub
-# Dashboard: New → Blueprint → connect repo, or configure services manually using these settings.
+# Use: Dashboard → New → Blueprint → connect SaiTejaBrandstory/AD-Hub
+# Or set the same fields manually on each service.
 
 services:
   - type: web
     name: adhub-api
     runtime: python
     rootDir: backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt || pip install fastapi uvicorn motor python-dotenv bcrypt PyJWT httpx apscheduler pymongo python-multipart email-validator passlib "python-jose[cryptography]" resend reportlab pandas openpyxl requests
+    buildCommand: chmod +x build.sh && ./build.sh
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
       - key: DB_NAME
         value: adhub
       - key: JWT_SECRET
