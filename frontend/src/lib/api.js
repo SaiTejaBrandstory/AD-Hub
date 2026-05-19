@@ -1,7 +1,14 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-export const API = `${BACKEND_URL}/api`;
+const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+
+if (!BACKEND_URL && process.env.NODE_ENV === "production") {
+  console.error(
+    "[AdHub] REACT_APP_BACKEND_URL is missing. Set it in Vercel → Settings → Environment Variables, then redeploy."
+  );
+}
+
+export const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
 
 export const api = axios.create({
   baseURL: API,

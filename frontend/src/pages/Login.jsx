@@ -34,9 +34,20 @@ export default function Login() {
     } catch (err) {
       const detail = err.response?.data?.detail;
       if (!err.response) {
-        toast.error(
-          "Cannot reach the API. Start the backend on port 8000, then open the app at http://localhost:3000 (not 127.0.0.1)."
-        );
+        const apiUrl = process.env.REACT_APP_BACKEND_URL;
+        if (!apiUrl) {
+          toast.error(
+            "API URL not set for production. In Vercel → Settings → Environment Variables, add REACT_APP_BACKEND_URL = your Render URL, then redeploy."
+          );
+        } else if (/localhost|127\.0\.0\.1/.test(apiUrl)) {
+          toast.error(
+            "Cannot reach the API. Start the backend on port 8000, then open the app at http://localhost:3000 (not 127.0.0.1)."
+          );
+        } else {
+          toast.error(
+            `Cannot reach the API at ${apiUrl}. Confirm Render is running, CORS_ORIGINS includes ${window.location.origin}, then redeploy both services.`
+          );
+        }
       } else {
         toast.error(
           typeof detail === "string" ? detail : Array.isArray(detail) ? detail[0]?.msg : "Authentication failed"
