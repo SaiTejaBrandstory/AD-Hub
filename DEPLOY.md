@@ -49,11 +49,15 @@ AdHub is two apps + MongoDB:
 ### Option B: Render
 
 1. [render.com](https://render.com) → **New Web Service** → connect repo.
-2. **Root Directory:** `backend`
+2. **Root Directory:** `backend` ← **required** (otherwise `requirements.txt` not found)
 3. **Build command:** `pip install -r requirements.txt`  
    If `requirements.txt` fails on Render, use the core install from `README.md`.
 4. **Start command:** `uvicorn server:app --host 0.0.0.0 --port $PORT`
 5. Add the same environment variables as above.
+
+Or use the repo’s **`render.yaml`**: **New → Blueprint** → select `AD-Hub` (creates API + static site).
+
+**Build error `No such file or directory: requirements.txt`:** Root Directory is blank or wrong — set it to `backend`.
 
 ---
 

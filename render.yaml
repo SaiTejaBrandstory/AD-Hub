@@ -1,0 +1,29 @@
+# Render Blueprint — AdHub
+# Dashboard: New → Blueprint → connect repo, or configure services manually using these settings.
+
+services:
+  - type: web
+    name: adhub-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt || pip install fastapi uvicorn motor python-dotenv bcrypt PyJWT httpx apscheduler pymongo python-multipart email-validator passlib "python-jose[cryptography]" resend reportlab pandas openpyxl requests
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_NAME
+        value: adhub
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: adhub-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_BACKEND_URL
+        sync: false
