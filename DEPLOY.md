@@ -75,7 +75,7 @@ Also set env **`PYTHON_VERSION`** = `3.11.11` (stops Python 3.14).
 
 1. [vercel.com](https://vercel.com) → **Add New Project** → import `AD-Hub` from GitHub.
 2. **Root Directory:** `frontend`
-3. **Build command:** `npm install --legacy-peer-deps && npm run build`
+3. **Build command:** `npm run build` (repo includes `frontend/.npmrc` + `vercel.json` for `--legacy-peer-deps`)
 4. **Output directory:** `build`
 5. **Environment variable:**
 
